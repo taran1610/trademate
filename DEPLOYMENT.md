@@ -2,14 +2,15 @@
 
 This guide covers multiple hosting options for your TradeScope AI application.
 
-## ⚠️ Important Security Note
+## 🔒 Security Implementation
 
-**Current Implementation**: The app stores API keys in browser localStorage, which means they're visible in the browser. For production use, consider:
-- Using environment variables on the server side
-- Creating a backend proxy API to handle Anthropic API calls
-- Using a service like Vercel Edge Functions or Netlify Functions
+**API keys are now stored securely server-side!** The app uses serverless functions to proxy API calls, keeping your Anthropic API key completely secure. See [SETUP.md](./SETUP.md) for configuration instructions.
 
-For now, users will enter their API keys directly in the app (stored locally in their browser).
+**Key Security Features**:
+- ✅ API keys stored as environment variables (never in code)
+- ✅ Serverless functions proxy all API calls
+- ✅ API key never exposed to browser/client
+- ✅ No localStorage for API keys
 
 ---
 

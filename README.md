@@ -33,13 +33,14 @@ npm run dev
 
 ### Configuration
 
-1. **Set up Anthropic API Key**:
-   - Go to [Anthropic Console](https://console.anthropic.com/) to get your API key
-   - Navigate to Settings in the app
-   - Enter your API key and save
+1. **Set up Anthropic API Key** (Server-Side):
+   - See [SETUP.md](./SETUP.md) for detailed instructions
+   - API key is stored as an environment variable (never in browser)
+   - For Vercel/Netlify: Add `ANTHROPIC_API_KEY` in platform settings
+   - For local dev: Create `.env.local` with your API key
 
 2. **Configure Email** (Optional):
-   - Go to Settings
+   - Go to Settings in the app
    - Enter your email address for trade log emails
 
 ## Usage
@@ -75,6 +76,11 @@ trademate/
 │   ├── storage.js       # Local storage API
 │   ├── main.jsx         # Entry point
 │   └── index.css        # Tailwind CSS imports
+├── api/
+│   └── analyze.js       # Vercel serverless function (secure API proxy)
+├── netlify/
+│   └── functions/
+│       └── analyze.js    # Netlify serverless function (secure API proxy)
 ├── index.html
 ├── package.json
 ├── vite.config.js
@@ -101,11 +107,12 @@ See [DEPLOYMENT.md](./DEPLOYMENT.md) for detailed hosting instructions.
 
 All platforms support free hosting with automatic HTTPS and CDN.
 
-## Notes
+## 🔒 Security
 
-- All data is stored in your browser's localStorage
-- The API key is stored locally and never sent anywhere except to Anthropic's API
-- Make sure to keep your API key secure and never commit it to version control
+- **API keys are stored server-side** as environment variables (never in browser)
+- All API calls go through secure serverless functions
+- Session data is stored in browser localStorage (charts, decisions, outcomes)
+- See [SETUP.md](./SETUP.md) for secure API key configuration
 
 ## License
 

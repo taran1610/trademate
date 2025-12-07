@@ -10,13 +10,11 @@ const TradeScopeAI = () => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [userEmail, setUserEmail] = useState('');
   const [filterPeriod, setFilterPeriod] = useState('all');
-  const [apiKey, setApiKey] = useState('');
 
   // Load data from storage
   useEffect(() => {
     loadSessions();
     loadUserEmail();
-    loadApiKey();
   }, []);
 
   const loadSessions = async () => {
@@ -45,95 +43,70 @@ const TradeScopeAI = () => {
     }
   };
 
-  const loadApiKey = async () => {
-    try {
-      const result = await window.storage.get('api:key');
-      if (result) setApiKey(result.value);
-    } catch (error) {
-      console.log('No API key set');
-    }
-  };
-
   const saveSession = async (session) => {
     await window.storage.set(`session:${session.id}`, JSON.stringify(session));
     await loadSessions();
   };
 
   const saveUserEmail = async (email) => {
-    await window.storage.set('user:email', email);
-    setUserEmail(email);
-  };
-
-  const saveApiKey = async (key) => {
-    await window.storage.set('api:key', key);
-    setApiKey(key);
-  };
-
-  // AI Analysis Function
-  const analyzeChart = async (imageData) => {
-    if (!apiKey) {
-      throw new Error('API key not set. Please configure it in Settings.');
+    try {
+      // Ensure storage is initialized
+      if (!window.storage) {
+        throw new Error('Storage not initialized. Please refresh the page.');
+      }
+      
+      // Validate email format
+      if (!email || !email.includes('@')) {
+        throw new Error('Please enter a valid email address');
+      }
+      
+      await window.storage.set('user:email', email);
+      setUserEmail(email);
+    } catch (error) {
+      console.error('Error saving email:', error);
+      alert('Error saving email: ' + error.message);
+      throw error;
     }
+  };
 
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
+  // Get API endpoint based on environment
+  const getApiEndpoint = () => {
+    const hostname = window.location.hostname;
+    
+    // Local development - use Vercel dev server endpoint
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+      return '/api/analyze';
+    }
+    
+    // Production - detect platform
+    // Netlify functions are at /.netlify/functions/analyze
+    // Vercel functions are at /api/analyze
+    // Try Vercel format first (most common)
+    return '/api/analyze';
+  };
+
+  // AI Analysis Function - Now uses secure serverless function
+  const analyzeChart = async (imageData) => {
+    const endpoint = getApiEndpoint();
+    
+    const response = await fetch(endpoint, {
       method: "POST",
-      headers: { 
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01"
+      headers: {
+        "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
-        max_tokens: 1000,
-        messages: [{
-          role: "user",
-          content: [
-            {
-              type: "image",
-              source: {
-                type: "base64",
-                media_type: imageData.type,
-                data: imageData.base64
-              }
-            },
-            {
-              type: "text",
-              text: `Analyze this trading chart image. Provide a structured analysis with:
-
-1. TREND DIRECTION: (Bullish/Bearish/Ranging)
-
-2. SWING HIGHS & LOWS: Identify key levels
-
-3. FAIR VALUE GAPS: Any imbalances detected?
-
-4. BREAK OF STRUCTURE: Has structure been broken?
-
-5. BIAS: (Long/Short/Neutral)
-
-6. ENTRY ZONE: Suggested entry price/zone
-
-7. STOP LOSS: Suggested SL level
-
-8. TAKE PROFIT: Suggested TP level(s)
-
-9. CONFIDENCE: (High/Medium/Low)
-
-10. NOTES: Any additional observations
-
-Be concise and actionable. Focus on ICT concepts and price action.`
-            }
-          ]
-        }]
+        imageData: imageData.base64,
+        imageType: imageData.type
       })
     });
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error?.message || `API error: ${response.status}`);
+      throw new Error(errorData.error || `API error: ${response.status}`);
     }
 
     const data = await response.json();
-    return data.content[0].text;
+    return data.analysis;
   };
 
   // Handle Image Upload
@@ -621,29 +594,26 @@ Session ID: ${session.id}
         <h2 className="text-2xl font-bold mb-6">Settings</h2>
         
         <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-semibold mb-2">Anthropic API Key</label>
-            <div className="flex gap-2">
-              <input
-                type="password"
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                placeholder="sk-ant-api03-..."
-                className="flex-1 p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-              <button
-                onClick={() => saveApiKey(apiKey)}
-                className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                Save
-              </button>
-            </div>
-            <p className="text-sm text-gray-600 mt-2">
-              Required for AI chart analysis. Get your API key from{' '}
-              <a href="https://console.anthropic.com/" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
-                Anthropic Console
-              </a>.
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <h3 className="font-semibold text-blue-900 mb-2">🔒 Secure API Configuration</h3>
+            <p className="text-sm text-blue-800 mb-3">
+              Your API key is now stored securely on the server as an environment variable. 
+              It's never exposed to the browser or client-side code.
             </p>
+            <div className="bg-white rounded p-3 text-sm">
+              <p className="font-semibold mb-2">To configure your API key:</p>
+              <ul className="list-disc list-inside space-y-1 text-gray-700">
+                <li><strong>Vercel:</strong> Go to Project Settings → Environment Variables → Add <code className="bg-gray-100 px-1 rounded">ANTHROPIC_API_KEY</code></li>
+                <li><strong>Netlify:</strong> Go to Site Settings → Environment Variables → Add <code className="bg-gray-100 px-1 rounded">ANTHROPIC_API_KEY</code></li>
+                <li><strong>Local Dev:</strong> Create <code className="bg-gray-100 px-1 rounded">.env.local</code> with <code className="bg-gray-100 px-1 rounded">ANTHROPIC_API_KEY=your-key</code></li>
+              </ul>
+              <p className="mt-3 text-xs text-gray-600">
+                Get your API key from{' '}
+                <a href="https://console.anthropic.com/" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                  Anthropic Console
+                </a>
+              </p>
+            </div>
           </div>
 
           <div>
@@ -657,7 +627,25 @@ Session ID: ${session.id}
                 className="flex-1 p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
               <button
-                onClick={() => saveUserEmail(userEmail)}
+                onClick={async (e) => {
+                  try {
+                    await saveUserEmail(userEmail);
+                    // Visual feedback
+                    const button = e.target;
+                    const originalText = button.textContent;
+                    button.textContent = '✓ Saved!';
+                    button.classList.add('bg-green-600');
+                    button.classList.remove('bg-blue-600', 'hover:bg-blue-700');
+                    button.classList.add('hover:bg-green-700');
+                    setTimeout(() => {
+                      button.textContent = originalText;
+                      button.classList.remove('bg-green-600', 'hover:bg-green-700');
+                      button.classList.add('bg-blue-600', 'hover:bg-blue-700');
+                    }, 2000);
+                  } catch (error) {
+                    // Error already shown in saveUserEmail
+                  }
+                }}
                 className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors"
               >
                 Save
