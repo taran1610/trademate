@@ -37,17 +37,35 @@ If you added the Supabase keys to Vercel but the app still shows "Supabase Not C
 
 ### Step 5: Test the App
 
-1. Open your deployed app: `https://trademate-theta.vercel.app`
+1. Open your deployed app (use your Vercel deployment URL, e.g., `https://your-project.vercel.app`)
 2. Check browser console (F12 → Console tab)
 3. Look for any Supabase-related errors
 
 ## Common Issues
+
+### Issue: "API key not configured" error when uploading charts
+
+**Error Message:** "Error analyzing chart: API key not configured. Please set ANTHROPIC_API_KEY environment variable."
+
+**Cause:** Anthropic API key not set in Vercel environment variables
+
+**Fix:**
+
+1. Get your API key from [Anthropic Console](https://console.anthropic.com/)
+2. Go to Vercel Dashboard → Your Project → **Settings** → **Environment Variables**
+3. Add new variable:
+   - **Name**: `ANTHROPIC_API_KEY`
+   - **Value**: Your API key from Anthropic
+   - **Environment**: Select all (Production, Preview, Development)
+4. **Redeploy** (critical - environment variables only apply to new deployments)
+5. Test uploading a chart again
 
 ### Issue: "Supabase Not Configured" message
 
 **Cause:** Environment variables not set or not redeployed
 
 **Fix:**
+
 1. Add variables in Vercel Settings → Environment Variables
 2. **Redeploy** (this is the most common mistake!)
 3. Wait for deployment to complete
@@ -58,6 +76,7 @@ If you added the Supabase keys to Vercel but the app still shows "Supabase Not C
 **Cause:** Wrong key or extra characters
 
 **Fix:**
+
 1. Copy the key again from Supabase
 2. Make sure there are no spaces before/after
 3. Don't add quotes around the value
@@ -68,6 +87,7 @@ If you added the Supabase keys to Vercel but the app still shows "Supabase Not C
 **Cause:** Supabase not configured, using localStorage fallback
 
 **Fix:**
+
 1. Check environment variables are set
 2. Redeploy
 3. Check browser console for errors
@@ -77,6 +97,7 @@ If you added the Supabase keys to Vercel but the app still shows "Supabase Not C
 **Cause:** Database schema not set up
 
 **Fix:**
+
 1. Go to Supabase Dashboard → **SQL Editor**
 2. Run the schema from `supabase/schema.sql`
 3. Verify tables exist in **Database** → **Tables**
@@ -93,14 +114,17 @@ If you added the Supabase keys to Vercel but the app still shows "Supabase Not C
 ## Still Not Working?
 
 1. **Check Vercel Logs:**
+
    - Deployments → Latest → Build Logs
    - Look for any red errors
 
 2. **Check Browser Console:**
+
    - Open app → F12 → Console
    - Look for Supabase errors
 
 3. **Verify Supabase Project:**
+
    - Make sure project is active
    - Check API settings are correct
    - Verify database tables exist
@@ -109,4 +133,3 @@ If you added the Supabase keys to Vercel but the app still shows "Supabase Not C
    - Create `.env.local` with your keys
    - Run `npm run dev`
    - If it works locally but not on Vercel, it's an env variable issue
-

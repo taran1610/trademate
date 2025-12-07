@@ -169,9 +169,11 @@ const TradeScopeAI = () => {
 
       const imageData = {
         base64: base64Data,
-        type: file.type,
-        url: URL.createObjectURL(file)
+        type: file.type
       };
+
+      // Create data URL for display (persists across page reloads)
+      const dataUrl = `data:${file.type};base64,${base64Data}`;
 
       // Analyze with AI
       const analysis = await analyzeChart(imageData);
@@ -184,7 +186,7 @@ const TradeScopeAI = () => {
       const newSession = {
         id: Date.now().toString(),
         timestamp: Date.now(),
-        image: imageData.url,
+        image: dataUrl, // Use data URL instead of blob URL for persistence
         imageData: base64Data,
         imageType: file.type,
         analysis: analysis,
@@ -372,7 +374,17 @@ Session ID: ${session.id}
                 className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
               >
                 <div className="flex items-center space-x-4">
-                  <img src={session.image} alt="Chart" className="w-16 h-16 object-cover rounded" />
+                  <img 
+                    src={session.image || (session.imageData ? `data:${session.imageType || 'image/png'};base64,${session.imageData}` : '')} 
+                    alt="Chart" 
+                    className="w-16 h-16 object-cover rounded" 
+                    onError={(e) => {
+                      // Fallback: try to reconstruct from base64 if image URL fails
+                      if (session.imageData && !e.target.src.startsWith('data:')) {
+                        e.target.src = `data:${session.imageType || 'image/png'};base64,${session.imageData}`;
+                      }
+                    }}
+                  />
                   <div>
                     <p className="font-semibold">{new Date(session.timestamp).toLocaleString()}</p>
                     <p className="text-sm text-gray-600">Bias: {session.bias.toUpperCase()}</p>
@@ -516,9 +528,15 @@ Session ID: ${session.id}
           <div className="bg-white rounded-lg shadow-lg p-6">
             <h3 className="text-xl font-bold mb-4">Chart Analysis</h3>
             <img 
-              src={selectedSession.image} 
+              src={selectedSession.image || (selectedSession.imageData ? `data:${selectedSession.imageType || 'image/png'};base64,${selectedSession.imageData}` : '')} 
               alt="Trading Chart" 
               className="w-full rounded-lg border"
+              onError={(e) => {
+                // Fallback: try to reconstruct from base64 if image URL fails
+                if (selectedSession.imageData && !e.target.src.startsWith('data:')) {
+                  e.target.src = `data:${selectedSession.imageType || 'image/png'};base64,${selectedSession.imageData}`;
+                }
+              }}
             />
             <div className="mt-4 flex items-center justify-between">
               <BiasIndicator bias={selectedSession.bias} large />

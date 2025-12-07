@@ -96,9 +96,30 @@ Be concise and actionable. Focus on ICT concepts and price action.`
     }
 
     const data = await response.json();
+    
+    // Validate response structure
+    if (!data || !data.content || !Array.isArray(data.content) || data.content.length === 0) {
+      return {
+        statusCode: 500,
+        body: JSON.stringify({ 
+          error: 'Invalid API response: missing or empty content array' 
+        })
+      };
+    }
+    
+    const firstContent = data.content[0];
+    if (!firstContent || typeof firstContent.text !== 'string') {
+      return {
+        statusCode: 500,
+        body: JSON.stringify({ 
+          error: 'Invalid API response: content[0].text is missing or invalid' 
+        })
+      };
+    }
+    
     return {
       statusCode: 200,
-      body: JSON.stringify({ analysis: data.content[0].text })
+      body: JSON.stringify({ analysis: firstContent.text })
     };
   } catch (error) {
     console.error('Analysis error:', error);

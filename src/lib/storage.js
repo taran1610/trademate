@@ -250,11 +250,27 @@ class UnifiedStorage {
   }
 
   _dbToSession(dbSession) {
+    // Reconstruct image URL from base64 if needed (handles blob URL invalidation)
+    let imageUrl = null;
+    if (dbSession.image_url) {
+      // If it's already a data URL, use it; otherwise prefer base64 reconstruction
+      if (dbSession.image_url.startsWith('data:')) {
+        imageUrl = dbSession.image_url;
+      } else if (dbSession.image_data) {
+        // Reconstruct from base64 (blob URLs become invalid after reload)
+        imageUrl = `data:${dbSession.image_type || 'image/png'};base64,${dbSession.image_data}`;
+      } else {
+        imageUrl = dbSession.image_url; // Fallback to stored URL
+      }
+    } else if (dbSession.image_data) {
+      // Construct data URL from base64
+      imageUrl = `data:${dbSession.image_type || 'image/png'};base64,${dbSession.image_data}`;
+    }
+    
     return {
       id: dbSession.id,
       timestamp: dbSession.timestamp,
-      image: dbSession.image_url || dbSession.image_data ? 
-        (dbSession.image_url || `data:${dbSession.image_type};base64,${dbSession.image_data}`) : null,
+      image: imageUrl,
       imageData: dbSession.image_data,
       imageType: dbSession.image_type,
       analysis: dbSession.analysis,
