@@ -1,9 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { Upload, TrendingUp, TrendingDown, Minus, CheckCircle, XCircle, BarChart3, FileText, Settings, Calendar } from 'lucide-react';
-import './storage.js';
+import { Upload, TrendingUp, TrendingDown, Minus, CheckCircle, XCircle, BarChart3, FileText, Settings, Calendar, LogOut, User } from 'lucide-react';
+import { supabase, isSupabaseConfigured } from './lib/supabase.js';
+import unifiedStorage from './lib/storage.js';
+import Auth from './components/Auth.jsx';
 
 const TradeScopeAI = () => {
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
   const [sessions, setSessions] = useState([]);
   const [currentView, setCurrentView] = useState('dashboard');
   const [selectedSession, setSelectedSession] = useState(null);
@@ -11,62 +15,101 @@ const TradeScopeAI = () => {
   const [userEmail, setUserEmail] = useState('');
   const [filterPeriod, setFilterPeriod] = useState('all');
 
-  // Load data from storage
+  // Check auth state on mount and listen for changes
   useEffect(() => {
-    loadSessions();
-    loadUserEmail();
+    if (isSupabaseConfigured()) {
+      // Get initial session
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        setUser(session?.user ?? null);
+        setLoading(false);
+        if (session?.user) {
+          loadSessions(session.user.id);
+          loadUserEmail(session.user.id);
+        } else {
+          // Try loading from localStorage if no auth
+          loadSessions();
+          loadUserEmail();
+        }
+      });
+
+      // Listen for auth changes
+      const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+        setUser(session?.user ?? null);
+        if (session?.user) {
+          loadSessions(session.user.id);
+          loadUserEmail(session.user.id);
+        } else {
+          loadSessions();
+          loadUserEmail();
+        }
+      });
+
+      return () => subscription.unsubscribe();
+    } else {
+      // No Supabase, use localStorage only
+      setLoading(false);
+      loadSessions();
+      loadUserEmail();
+    }
   }, []);
 
-  const loadSessions = async () => {
+  const loadSessions = async (userId = null) => {
     try {
-      const result = await window.storage.list('session:');
-      if (result && result.keys) {
-        const loadedSessions = await Promise.all(
-          result.keys.map(async (key) => {
-            const data = await window.storage.get(key);
-            return data ? JSON.parse(data.value) : null;
-          })
-        );
-        setSessions(loadedSessions.filter(s => s !== null).sort((a, b) => b.timestamp - a.timestamp));
-      }
+      const loadedSessions = await unifiedStorage.loadSessions(userId);
+      setSessions(loadedSessions);
     } catch (error) {
-      console.log('No existing sessions found');
+      console.error('Error loading sessions:', error);
+      setSessions([]);
     }
   };
 
-  const loadUserEmail = async () => {
+  const loadUserEmail = async (userId = null) => {
     try {
-      const result = await window.storage.get('user:email');
-      if (result) setUserEmail(result.value);
+      const email = await unifiedStorage.loadUserEmail(userId);
+      setUserEmail(email || '');
     } catch (error) {
-      console.log('No email set');
+      console.error('Error loading email:', error);
     }
   };
 
   const saveSession = async (session) => {
-    await window.storage.set(`session:${session.id}`, JSON.stringify(session));
-    await loadSessions();
+    const userId = user?.id || null;
+    await unifiedStorage.saveSession(session, userId);
+    await loadSessions(userId);
   };
 
   const saveUserEmail = async (email) => {
     try {
-      // Ensure storage is initialized
-      if (!window.storage) {
-        throw new Error('Storage not initialized. Please refresh the page.');
-      }
-      
       // Validate email format
       if (!email || !email.includes('@')) {
         throw new Error('Please enter a valid email address');
       }
       
-      await window.storage.set('user:email', email);
+      const userId = user?.id || null;
+      await unifiedStorage.saveUserEmail(email, userId);
       setUserEmail(email);
     } catch (error) {
       console.error('Error saving email:', error);
       alert('Error saving email: ' + error.message);
       throw error;
     }
+  };
+
+  const handleAuthChange = (newUser) => {
+    setUser(newUser);
+    if (newUser) {
+      loadSessions(newUser.id);
+      loadUserEmail(newUser.id);
+    }
+  };
+
+  const handleLogout = async () => {
+    if (isSupabaseConfigured() && user) {
+      await supabase.auth.signOut();
+    }
+    setUser(null);
+    setSessions([]);
+    setUserEmail('');
   };
 
   // Get API endpoint based on environment
@@ -664,12 +707,8 @@ Session ID: ${session.id}
             <button
               onClick={async () => {
                 if (confirm('Are you sure? This will delete all session data.')) {
-                  const keys = await window.storage.list('session:');
-                  if (keys) {
-                    for (const key of keys.keys) {
-                      await window.storage.delete(key);
-                    }
-                  }
+                  const userId = user?.id || null;
+                  await unifiedStorage.deleteAllSessions(userId);
                   setSessions([]);
                   alert('All data cleared');
                 }
@@ -684,6 +723,23 @@ Session ID: ${session.id}
     </div>
   );
 
+  // Show loading state
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show auth if Supabase is configured and user is not logged in
+  if (isSupabaseConfigured() && !user) {
+    return <Auth onAuthChange={handleAuthChange} />;
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
       {/* Header */}
@@ -696,26 +752,45 @@ Session ID: ${session.id}
             <h1 className="text-2xl font-bold text-gray-900">TradeScope AI</h1>
           </div>
           
-          <nav className="flex gap-2">
-            {[
-              { id: 'dashboard', icon: <Upload size={20} />, label: 'Dashboard' },
-              { id: 'performance', icon: <BarChart3 size={20} />, label: 'Performance' },
-              { id: 'settings', icon: <Settings size={20} />, label: 'Settings' }
-            ].map(nav => (
-              <button
-                key={nav.id}
-                onClick={() => setCurrentView(nav.id)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
-                  currentView === nav.id
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                {nav.icon}
-                <span className="hidden md:inline">{nav.label}</span>
-              </button>
-            ))}
-          </nav>
+          <div className="flex items-center gap-4">
+            <nav className="flex gap-2">
+              {[
+                { id: 'dashboard', icon: <Upload size={20} />, label: 'Dashboard' },
+                { id: 'performance', icon: <BarChart3 size={20} />, label: 'Performance' },
+                { id: 'settings', icon: <Settings size={20} />, label: 'Settings' }
+              ].map(nav => (
+                <button
+                  key={nav.id}
+                  onClick={() => setCurrentView(nav.id)}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
+                    currentView === nav.id
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  {nav.icon}
+                  <span className="hidden md:inline">{nav.label}</span>
+                </button>
+              ))}
+            </nav>
+            
+            {isSupabaseConfigured() && user && (
+              <div className="flex items-center gap-3 pl-4 border-l border-gray-200">
+                <div className="flex items-center gap-2 text-sm text-gray-700">
+                  <User size={16} />
+                  <span className="hidden md:inline">{user.email}</span>
+                </div>
+                <button
+                  onClick={handleLogout}
+                  className="flex items-center gap-2 px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm"
+                  title="Logout"
+                >
+                  <LogOut size={16} />
+                  <span className="hidden md:inline">Logout</span>
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </header>
 

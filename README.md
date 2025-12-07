@@ -16,30 +16,47 @@ A React-based trading chart analysis application that uses AI to analyze trading
 ### Prerequisites
 
 - Node.js 18+ and npm/yarn/pnpm
+- Supabase account (free tier works great!)
 
 ### Installation
 
 1. Install dependencies:
+
 ```bash
 npm install
 ```
 
-2. Start the development server:
+2. **Set up Supabase** (Required for multi-user):
+
+   - See [SUPABASE_SETUP.md](./SUPABASE_SETUP.md) for detailed instructions
+   - Create a Supabase project
+   - Run the database schema
+   - Add credentials to `.env.local`
+
+3. Start the development server:
+
 ```bash
 npm run dev
 ```
 
-3. Open your browser to `http://localhost:5173`
+4. Open your browser to `http://localhost:5173`
 
 ### Configuration
 
-1. **Set up Anthropic API Key** (Server-Side):
+1. **Supabase Setup** (Required):
+
+   - Follow [SUPABASE_SETUP.md](./SUPABASE_SETUP.md)
+   - Creates user accounts, database, and secure storage
+   - Enables multi-user support for your friends!
+
+2. **Set up Anthropic API Key** (Server-Side):
+
    - See [SETUP.md](./SETUP.md) for detailed instructions
    - API key is stored as an environment variable (never in browser)
    - For Vercel/Netlify: Add `ANTHROPIC_API_KEY` in platform settings
    - For local dev: Create `.env.local` with your API key
 
-2. **Configure Email** (Optional):
+3. **Configure Email** (Optional):
    - Go to Settings in the app
    - Enter your email address for trade log emails
 
@@ -71,16 +88,23 @@ npm run dev
 ```
 trademate/
 ├── src/
-│   ├── App.jsx          # Main app wrapper
-│   ├── TradeScopeAI.jsx # Main component
-│   ├── storage.js       # Local storage API
-│   ├── main.jsx         # Entry point
-│   └── index.css        # Tailwind CSS imports
+│   ├── App.jsx              # Main app wrapper
+│   ├── TradeScopeAI.jsx    # Main component
+│   ├── components/
+│   │   └── Auth.jsx         # Authentication UI
+│   ├── lib/
+│   │   ├── supabase.js      # Supabase client
+│   │   └── storage.js       # Unified storage (Supabase + localStorage)
+│   ├── storage.js           # Legacy localStorage (backward compat)
+│   ├── main.jsx             # Entry point
+│   └── index.css            # Tailwind CSS imports
+├── supabase/
+│   └── schema.sql           # Database schema
 ├── api/
-│   └── analyze.js       # Vercel serverless function (secure API proxy)
+│   └── analyze.js           # Vercel serverless function (secure API proxy)
 ├── netlify/
 │   └── functions/
-│       └── analyze.js    # Netlify serverless function (secure API proxy)
+│       └── analyze.js       # Netlify serverless function (secure API proxy)
 ├── index.html
 ├── package.json
 ├── vite.config.js
@@ -100,6 +124,7 @@ The built files will be in the `dist` directory.
 See [DEPLOYMENT.md](./DEPLOYMENT.md) for detailed hosting instructions.
 
 **Quick Deploy Options:**
+
 - **Vercel** (Recommended): Connect GitHub repo → Auto-deploy
 - **Netlify**: Connect GitHub repo → Auto-deploy
 - **GitHub Pages**: Use the included GitHub Actions workflow
@@ -111,10 +136,13 @@ All platforms support free hosting with automatic HTTPS and CDN.
 
 - **API keys are stored server-side** as environment variables (never in browser)
 - All API calls go through secure serverless functions
-- Session data is stored in browser localStorage (charts, decisions, outcomes)
+- **User authentication** via Supabase (email/password or magic links)
+- **Database with Row Level Security** - users only see their own data
+- **Automatic backups** via Supabase
+- Falls back to localStorage if Supabase isn't configured
 - See [SETUP.md](./SETUP.md) for secure API key configuration
+- See [SUPABASE_SETUP.md](./SUPABASE_SETUP.md) for database setup
 
 ## License
 
 MIT
-
