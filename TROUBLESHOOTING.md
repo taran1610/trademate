@@ -43,22 +43,21 @@ If you added the Supabase keys to Vercel but the app still shows "Supabase Not C
 
 ## Common Issues
 
-### Issue: "API key not configured" error when uploading charts
+### Issue: "No API key on file" error when uploading charts
 
-**Error Message:** "Error analyzing chart: API key not configured. Please set ANTHROPIC_API_KEY environment variable."
+**Error Message:** "No API key on file. Please add your API key in Settings before using this feature."
 
-**Cause:** Anthropic API key not set in Vercel environment variables
+**Cause:** User hasn't added their own API key in Settings
 
 **Fix:**
 
-1. Get your API key from [Anthropic Console](https://console.anthropic.com/)
-2. Go to Vercel Dashboard → Your Project → **Settings** → **Environment Variables**
-3. Add new variable:
-   - **Name**: `ANTHROPIC_API_KEY`
-   - **Value**: Your API key from Anthropic
-   - **Environment**: Select all (Production, Preview, Development)
-4. **Redeploy** (critical - environment variables only apply to new deployments)
-5. Test uploading a chart again
+1. Go to **Settings** in the app
+2. Enter your Anthropic API key in the "Your API Key" section
+3. Click **Save Key**
+4. The key will be encrypted and stored securely
+5. Try uploading a chart again
+
+**Note:** Each user must provide their own API key. There is no master/shared key.
 
 ### Issue: "Supabase Not Configured" message
 

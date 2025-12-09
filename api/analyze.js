@@ -1,5 +1,8 @@
 // Vercel Serverless Function
-// This keeps your API key secure on the server
+// Uses user's own encrypted API key - BYOK (Bring Your Own Key) model
+
+import { decryptApiKey } from './lib/encryption.js';
+import { verifyUser, getUserEncryptedKey, isConfigured } from './lib/supabase.js';
 
 export default async function handler(req, res) {
   // Only allow POST requests
@@ -7,14 +10,47 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  // Get API key from environment variable
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-
-  if (!apiKey) {
+  // Check Supabase configuration
+  if (!isConfigured()) {
     return res.status(500).json({ 
-      error: 'API key not configured. Please set ANTHROPIC_API_KEY environment variable.' 
+      error: 'Server configuration error: Supabase not configured' 
     });
   }
+
+  try {
+    // Get auth token from Authorization header
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ 
+        error: 'Missing or invalid authorization token. Please sign in.' 
+      });
+    }
+
+    const token = authHeader.replace('Bearer ', '');
+    
+    // Verify user and get user ID
+    const userId = await verifyUser(token);
+    
+    // Get user's encrypted API key from database
+    const encryptedKey = await getUserEncryptedKey(userId);
+    
+    // HARD LOCK: Block request if no API key exists
+    if (!encryptedKey) {
+      return res.status(403).json({ 
+        error: 'No API key on file. Please add your API key in Settings before using this feature.' 
+      });
+    }
+
+    // Decrypt the API key at runtime
+    let apiKey;
+    try {
+      apiKey = decryptApiKey(encryptedKey);
+    } catch (decryptError) {
+      console.error('Decryption error:', decryptError.message);
+      return res.status(500).json({ 
+        error: 'Failed to decrypt API key. Please update your key in Settings.' 
+      });
+    }
 
   try {
     const { imageData, imageType } = req.body;
@@ -101,8 +137,11 @@ Be concise and actionable. Focus on ICT concepts and price action.`
     
     return res.status(200).json({ analysis: firstContent.text });
   } catch (error) {
-    console.error('Analysis error:', error);
-    return res.status(500).json({ error: error.message || 'Internal server error' });
+    // Never log API keys or sensitive data
+    console.error('Analysis error:', error.message);
+    return res.status(500).json({ 
+      error: error.message || 'Internal server error' 
+    });
   }
 }
 

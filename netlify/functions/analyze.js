@@ -1,8 +1,10 @@
 // Netlify Serverless Function
-// This keeps your API key secure on the server
+// Uses user's own encrypted API key - BYOK (Bring Your Own Key) model
+
+const { decryptApiKey } = require('../lib/encryption.js');
+const { verifyUser, getUserEncryptedKey, isConfigured } = require('../lib/supabase.js');
 
 exports.handler = async (event, context) => {
-  // Only allow POST requests
   if (event.httpMethod !== 'POST') {
     return {
       statusCode: 405,
@@ -10,17 +12,50 @@ exports.handler = async (event, context) => {
     };
   }
 
-  // Get API key from environment variable
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-
-  if (!apiKey) {
+  if (!isConfigured()) {
     return {
       statusCode: 500,
-      body: JSON.stringify({ 
-        error: 'API key not configured. Please set ANTHROPIC_API_KEY environment variable.' 
-      })
+      body: JSON.stringify({ error: 'Server configuration error: Supabase not configured' })
     };
   }
+
+  try {
+    const authHeader = event.headers.authorization || event.headers.Authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return {
+        statusCode: 401,
+        body: JSON.stringify({ error: 'Missing or invalid authorization token. Please sign in.' })
+      };
+    }
+
+    const token = authHeader.replace('Bearer ', '');
+    const userId = await verifyUser(token);
+    
+    const encryptedKey = await getUserEncryptedKey(userId);
+    
+    // HARD LOCK: Block request if no API key exists
+    if (!encryptedKey) {
+      return {
+        statusCode: 403,
+        body: JSON.stringify({ 
+          error: 'No API key on file. Please add your API key in Settings before using this feature.' 
+        })
+      };
+    }
+
+    // Decrypt the API key at runtime
+    let apiKey;
+    try {
+      apiKey = decryptApiKey(encryptedKey);
+    } catch (decryptError) {
+      console.error('Decryption error:', decryptError.message);
+      return {
+        statusCode: 500,
+        body: JSON.stringify({ 
+          error: 'Failed to decrypt API key. Please update your key in Settings.' 
+        })
+      };
+    }
 
   try {
     const { imageData, imageType } = JSON.parse(event.body);
@@ -122,7 +157,7 @@ Be concise and actionable. Focus on ICT concepts and price action.`
       body: JSON.stringify({ analysis: firstContent.text })
     };
   } catch (error) {
-    console.error('Analysis error:', error);
+    console.error('Analysis error:', error.message);
     return {
       statusCode: 500,
       body: JSON.stringify({ error: error.message || 'Internal server error' })

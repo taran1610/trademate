@@ -1,138 +1,134 @@
-# Setup Guide - Secure API Key Configuration
+# Setup Guide - BYOK (Bring Your Own Key) Configuration
 
-This guide shows you how to securely configure your Anthropic API key so it's never exposed to the client.
+This guide shows you how to configure the Bring-Your-Own-Key system where each user provides their own API key.
 
 ## 🔒 Security Overview
 
-Your API key is now stored as a **server-side environment variable** and is never exposed to the browser. The frontend calls a secure serverless function that proxies requests to Anthropic.
+- ✅ Each user must provide their own Anthropic API key
+- ✅ Keys are encrypted at rest using AES-256-GCM
+- ✅ Keys are never exposed to the browser or logged
+- ✅ No master API key exists
+- ✅ Users pay for their own API usage
 
 ## 📋 Setup Steps
 
-### Option 1: Vercel (Recommended)
+### Step 1: Database Migration
 
-1. **Deploy to Vercel**:
-   - Push your code to GitHub
-   - Import project in Vercel
-   - Deploy (don't worry about the API key yet)
+1. Go to Supabase Dashboard → **SQL Editor**
+2. Run the migration script from `supabase/migration-byok.sql`
+3. This adds the `encrypted_api_key` column to `user_preferences` table
 
-2. **Add Environment Variable**:
-   - Go to your project in Vercel dashboard
-   - Click **Settings** → **Environment Variables**
-   - Add new variable:
-     - **Name**: `ANTHROPIC_API_KEY`
-     - **Value**: Your API key from [Anthropic Console](https://console.anthropic.com/)
-     - **Environment**: Production, Preview, Development (select all)
-   - Click **Save**
+### Step 2: Generate Encryption Secret
 
-3. **Redeploy**:
-   - Go to **Deployments**
-   - Click the three dots on latest deployment
-   - Click **Redeploy**
+Generate a strong encryption secret:
 
-4. **Test**:
-   - Upload a chart image
-   - It should work without any API key in the browser!
+```bash
+openssl rand -base64 32
+```
 
-### Option 2: Netlify
+Copy the output - you'll need it in the next step.
 
-1. **Deploy to Netlify**:
-   - Push your code to GitHub
-   - Import project in Netlify
-   - Build settings:
-     - Build command: `npm run build`
-     - Publish directory: `dist`
-   - Deploy
+### Step 3: Add Environment Variables
 
-2. **Add Environment Variable**:
-   - Go to **Site settings** → **Environment variables**
-   - Click **Add a variable**
-   - **Key**: `ANTHROPIC_API_KEY`
-   - **Value**: Your API key
-   - **Scopes**: All scopes (Production, Deploy previews, Branch deploys)
-   - Click **Save**
+#### For Vercel:
 
-3. **Redeploy**:
-   - Go to **Deploys**
-   - Click **Trigger deploy** → **Clear cache and deploy site**
+1. Go to your project in Vercel dashboard
+2. Click **Settings** → **Environment Variables**
+3. Add these variables:
 
-4. **Update Function Path** (if needed):
-   - The app will try `/api/analyze` first
-   - If that doesn't work, update `getApiEndpoint()` in `TradeScopeAI.jsx` to return `/.netlify/functions/analyze`
+   **Variable 1:**
+   - **Name**: `ENCRYPTION_SECRET`
+   - **Value**: The secret you generated (from Step 2)
+   - **Environment**: Production, Preview, Development (select all)
 
-### Option 3: Local Development
+   **Variable 2:**
+   - **Name**: `SUPABASE_SERVICE_ROLE_KEY`
+   - **Value**: Your Supabase service role key (from Supabase Dashboard → Settings → API)
+   - **Environment**: Production, Preview, Development (select all)
 
-1. **Install Vercel CLI** (for local serverless functions):
-   ```bash
-   npm install -g vercel
-   ```
+4. Click **Save**
 
-2. **Create `.env.local` file** in project root:
-   ```bash
-   ANTHROPIC_API_KEY=sk-ant-api03-your-key-here
-   ```
+#### For Netlify:
 
-3. **Run Vercel dev server**:
-   ```bash
-   vercel dev
-   ```
-   This will start both the frontend and API functions locally.
+1. Go to **Site settings** → **Environment variables**
+2. Add the same two variables as above
+3. Click **Save**
 
-4. **Or use Vite dev server** (API won't work, but UI will):
-   ```bash
-   npm run dev
-   ```
-   Note: You'll need to deploy to test the API functionality.
+#### For Local Development:
+
+Create `.env.local`:
+```bash
+ENCRYPTION_SECRET=your-generated-secret-here
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key-here
+VITE_SUPABASE_URL=your-supabase-url
+VITE_SUPABASE_ANON_KEY=your-anon-key
+```
+
+### Step 4: Get Supabase Service Role Key
+
+1. Go to Supabase Dashboard → Your Project
+2. Go to **Settings** → **API**
+3. Find **service_role** key (secret) - this is different from the anon key
+4. Copy it - you'll use this as `SUPABASE_SERVICE_ROLE_KEY`
+
+**⚠️ WARNING:** Never expose the service role key to the frontend. It has admin access.
+
+### Step 5: Redeploy
+
+**CRITICAL:** You must redeploy after adding environment variables!
+
+1. **Vercel**: Go to Deployments → Click three dots → Redeploy
+2. **Netlify**: Trigger a new deployment
+3. Wait for deployment to complete
+
+### Step 6: Test
+
+1. Sign in to your app
+2. Go to **Settings**
+3. Enter your Anthropic API key
+4. Click **Save Key**
+5. Try uploading a chart - it should work!
+
+## 🔐 How It Works
+
+1. **User adds key**: User enters their API key in Settings
+2. **Encryption**: Key is encrypted with AES-256-GCM using `ENCRYPTION_SECRET`
+3. **Storage**: Encrypted key is stored in Supabase database
+4. **Usage**: When user uploads chart:
+   - Server fetches encrypted key
+   - Decrypts at runtime
+   - Uses user's key for Anthropic API call
+   - Key is never logged or exposed
 
 ## ✅ Verification
 
-To verify your API key is secure:
+- [ ] Database migration completed
+- [ ] `ENCRYPTION_SECRET` added to environment variables
+- [ ] `SUPABASE_SERVICE_ROLE_KEY` added to environment variables
+- [ ] Redeployed after adding variables
+- [ ] User can save API key in Settings
+- [ ] Chart upload works with user's key
+- [ ] Chart upload blocked without key
 
-1. **Open browser DevTools** (F12)
-2. **Go to Network tab**
-3. **Upload a chart**
-4. **Check the request to `/api/analyze`**:
-   - ✅ Should NOT contain your API key
-   - ✅ Should only send image data
-   - ✅ API key should only exist in server environment variables
+## 🚨 Important Notes
 
-## 🔍 Troubleshooting
+1. **ENCRYPTION_SECRET**:
+   - Must be the same across all deployments
+   - If changed, all encrypted keys become invalid
+   - Store securely (password manager)
+   - Never commit to git
 
-### "API key not configured" error
+2. **SUPABASE_SERVICE_ROLE_KEY**:
+   - Has admin database access
+   - Only used server-side
+   - Never expose to frontend
 
-- **Vercel**: Make sure you added the environment variable and redeployed
-- **Netlify**: Check environment variables in site settings
-- **Local**: Make sure `.env.local` exists and has the correct key
+3. **No Master Key**:
+   - ❌ Remove `ANTHROPIC_API_KEY` if it exists
+   - ✅ Each user provides their own key
+   - ✅ You pay nothing for user API usage
 
-### CORS errors
+## 📚 See Also
 
-- Serverless functions handle CORS automatically
-- If you see CORS errors, check that the function is deployed correctly
-
-### Function not found (404)
-
-- **Vercel**: Make sure `api/analyze.js` is in your repo
-- **Netlify**: Make sure `netlify/functions/analyze.js` exists
-- Check the function path in `getApiEndpoint()` matches your platform
-
-## 🚀 Production Checklist
-
-- [ ] API key added as environment variable (not in code)
-- [ ] `.env.local` is in `.gitignore` (already done)
-- [ ] No API keys in any committed files
-- [ ] Tested that API works after deployment
-- [ ] Verified API key is not visible in browser DevTools
-
-## 📝 Notes
-
-- **Never commit** `.env.local` or any file with your API key
-- The API key is only used server-side in the serverless function
-- Each user's browser never sees or stores the API key
-- You can rotate your API key anytime by updating the environment variable
-
-## 🔄 Updating Your API Key
-
-1. Go to your hosting platform (Vercel/Netlify)
-2. Update the `ANTHROPIC_API_KEY` environment variable
-3. Redeploy your application
-4. Done! No code changes needed.
-
+- [BYOK_SETUP.md](./BYOK_SETUP.md) - Complete BYOK documentation
+- [TROUBLESHOOTING.md](./TROUBLESHOOTING.md) - Common issues and fixes
