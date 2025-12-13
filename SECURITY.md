@@ -1,29 +1,36 @@
-# Security Implementation Summary
+# Security Implementation Summary - BYOK Model
 
 ## ✅ What Changed
 
-Your API keys are now **completely secure** and never exposed to the browser or client-side code.
+Your application now uses a **Bring-Your-Own-Key (BYOK)** model where each user provides their own API key.
 
-### Before (Insecure)
-- ❌ API keys stored in browser localStorage
-- ❌ API keys visible in browser DevTools
-- ❌ API keys sent directly from browser to Anthropic
-- ❌ Anyone could inspect and steal your API key
+### Before (Master Key Model)
+- ❌ Single master API key for all users
+- ❌ You pay for all user API usage
+- ❌ Key stored as environment variable
+- ❌ Not scalable for multiple users
 
-### After (Secure)
-- ✅ API keys stored as server-side environment variables
-- ✅ API keys never sent to browser
-- ✅ All API calls proxied through secure serverless functions
-- ✅ API key completely invisible to users/browsers
+### After (BYOK Model)
+- ✅ Each user provides their own API key
+- ✅ Keys encrypted at rest with AES-256-GCM
+- ✅ Keys never exposed to browser or logged
+- ✅ Users pay for their own API usage
+- ✅ No master key - completely secure
+- ✅ Scalable to unlimited users
 
 ## 🔧 How It Works
 
-1. **Frontend** uploads chart image
-2. **Frontend** sends image to `/api/analyze` (your serverless function)
-3. **Serverless Function** reads API key from environment variable
-4. **Serverless Function** makes request to Anthropic API
-5. **Serverless Function** returns analysis to frontend
-6. **API key never leaves the server**
+1. **User adds key**: User enters their API key in Settings
+2. **Encryption**: Key encrypted with AES-256-GCM using `ENCRYPTION_SECRET`
+3. **Storage**: Encrypted key stored in Supabase database
+4. **Request flow**:
+   - User uploads chart image
+   - Frontend sends request with auth token
+   - Server verifies user and fetches encrypted key
+   - Server decrypts key at runtime
+   - Server uses user's key for Anthropic API call
+   - Response returned to user
+5. **Security**: Key never logged, never exposed, decrypted only when needed
 
 ## 📁 Files Created
 
@@ -41,8 +48,11 @@ Your API keys are now **completely secure** and never exposed to the browser or 
 ## 🚀 Next Steps
 
 1. **Deploy your app** to Vercel or Netlify
-2. **Add environment variable** `ANTHROPIC_API_KEY` in platform settings
-3. **Redeploy** - Your API key is now secure!
+2. **Add environment variables** (see [BYOK_SETUP.md](./BYOK_SETUP.md)):
+   - `ENCRYPTION_SECRET` - For encrypting user API keys
+   - `SUPABASE_SERVICE_ROLE_KEY` - For server-side database access
+3. **Run database migration** to add `encrypted_api_key` column
+4. **Redeploy** - Users can now add their own API keys securely!
 
 See [SETUP.md](./SETUP.md) for detailed instructions.
 
@@ -59,8 +69,10 @@ To verify your API key is secure:
 
 ## 🎯 Benefits
 
-- **Security**: API keys never exposed
-- **Scalability**: Works for all users without individual API keys
+- **Security**: Enterprise-grade AES-256-GCM encryption
+- **Cost**: You pay nothing - users pay for their own usage
+- **Scalability**: Unlimited users, no per-user cost to you
 - **Compliance**: Meets security best practices
-- **Maintenance**: Easy to rotate API keys (just update env var)
+- **Monetization**: Can charge for app access, not API usage
+- **Privacy**: Each user's key is completely isolated
 

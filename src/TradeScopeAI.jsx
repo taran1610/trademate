@@ -14,6 +14,9 @@ const TradeScopeAI = () => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [userEmail, setUserEmail] = useState('');
   const [filterPeriod, setFilterPeriod] = useState('all');
+  const [apiKey, setApiKey] = useState('');
+  const [apiKeyStatus, setApiKeyStatus] = useState(null); // 'saving', 'saved', 'error', 'deleting'
+  const [apiKeyMessage, setApiKeyMessage] = useState('');
 
   // Check auth state on mount and listen for changes
   useEffect(() => {
@@ -128,14 +131,48 @@ const TradeScopeAI = () => {
     return '/api/analyze';
   };
 
-  // AI Analysis Function - Now uses secure serverless function
+  // Get user's auth token for API requests
+  const getAuthToken = async () => {
+    if (!isSupabaseConfigured() || !user) {
+      return null;
+    }
+    
+    const { data: { session } } = await supabase.auth.getSession();
+    return session?.access_token || null;
+  };
+
+  // Check if user has API key configured
+  const checkUserHasApiKey = async () => {
+    if (!isSupabaseConfigured() || !user) {
+      return false;
+    }
+
+    try {
+      const token = await getAuthToken();
+      if (!token) return false;
+
+      // Check if key exists by trying to fetch it (we'll create a lightweight check endpoint)
+      // For now, we'll check during the actual request
+      return true; // Will be validated on server
+    } catch (error) {
+      return false;
+    }
+  };
+
+  // AI Analysis Function - Now uses user's own API key (BYOK)
   const analyzeChart = async (imageData) => {
     const endpoint = getApiEndpoint();
+    const token = await getAuthToken();
+    
+    if (!token) {
+      throw new Error('Not authenticated. Please sign in.');
+    }
     
     const response = await fetch(endpoint, {
       method: "POST",
       headers: {
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${token}`
       },
       body: JSON.stringify({
         imageData: imageData.base64,
@@ -145,7 +182,15 @@ const TradeScopeAI = () => {
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error || `API error: ${response.status}`);
+      const errorMessage = errorData.error || `API error: ${response.status}`;
+      
+      // If no API key error, redirect to settings
+      if (errorMessage.includes('No API key on file') || errorMessage.includes('No API key')) {
+        setCurrentView('settings');
+        throw new Error('Please add your API key in Settings to use this feature.');
+      }
+      
+      throw new Error(errorMessage);
     }
 
     const data = await response.json();
@@ -156,6 +201,12 @@ const TradeScopeAI = () => {
   const handleImageUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
+
+    // Check authentication first
+    if (!user) {
+      alert('Please sign in to upload charts.');
+      return;
+    }
 
     setIsAnalyzing(true);
     try {
@@ -169,9 +220,11 @@ const TradeScopeAI = () => {
 
       const imageData = {
         base64: base64Data,
-        type: file.type,
-        url: URL.createObjectURL(file)
+        type: file.type
       };
+
+      // Create data URL for display (persists across page reloads)
+      const dataUrl = `data:${file.type};base64,${base64Data}`;
 
       // Analyze with AI
       const analysis = await analyzeChart(imageData);
@@ -184,7 +237,7 @@ const TradeScopeAI = () => {
       const newSession = {
         id: Date.now().toString(),
         timestamp: Date.now(),
-        image: imageData.url,
+        image: dataUrl, // Use data URL instead of blob URL for persistence
         imageData: base64Data,
         imageType: file.type,
         analysis: analysis,
@@ -334,16 +387,22 @@ Session ID: ${session.id}
           <Upload className="mx-auto h-12 w-12 text-gray-400 mb-4" />
           <h3 className="text-lg font-semibold mb-2">Upload Trading Chart</h3>
           <p className="text-gray-600 mb-4">PNG, JPG, or SVG • 1m, 5m, or 15m timeframes</p>
-          <label className="cursor-pointer inline-block bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors">
-            {isAnalyzing ? 'Analyzing...' : 'Choose File'}
-            <input 
-              type="file" 
-              accept="image/png,image/jpeg,image/svg+xml" 
-              onChange={handleImageUpload}
-              disabled={isAnalyzing}
-              className="hidden"
-            />
-          </label>
+          {!user ? (
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+              <p className="text-yellow-800 font-semibold">Please sign in to upload charts</p>
+            </div>
+          ) : (
+            <label className="cursor-pointer inline-block bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors">
+              {isAnalyzing ? 'Analyzing...' : 'Choose File'}
+              <input 
+                type="file" 
+                accept="image/png,image/jpeg,image/svg+xml" 
+                onChange={handleImageUpload}
+                disabled={isAnalyzing}
+                className="hidden"
+              />
+            </label>
+          )}
         </div>
       </div>
 
@@ -372,7 +431,17 @@ Session ID: ${session.id}
                 className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
               >
                 <div className="flex items-center space-x-4">
-                  <img src={session.image} alt="Chart" className="w-16 h-16 object-cover rounded" />
+                  <img 
+                    src={session.image || (session.imageData ? `data:${session.imageType || 'image/png'};base64,${session.imageData}` : '')} 
+                    alt="Chart" 
+                    className="w-16 h-16 object-cover rounded" 
+                    onError={(e) => {
+                      // Fallback: try to reconstruct from base64 if image URL fails
+                      if (session.imageData && !e.target.src.startsWith('data:')) {
+                        e.target.src = `data:${session.imageType || 'image/png'};base64,${session.imageData}`;
+                      }
+                    }}
+                  />
                   <div>
                     <p className="font-semibold">{new Date(session.timestamp).toLocaleString()}</p>
                     <p className="text-sm text-gray-600">Bias: {session.bias.toUpperCase()}</p>
@@ -516,9 +585,15 @@ Session ID: ${session.id}
           <div className="bg-white rounded-lg shadow-lg p-6">
             <h3 className="text-xl font-bold mb-4">Chart Analysis</h3>
             <img 
-              src={selectedSession.image} 
+              src={selectedSession.image || (selectedSession.imageData ? `data:${selectedSession.imageType || 'image/png'};base64,${selectedSession.imageData}` : '')} 
               alt="Trading Chart" 
               className="w-full rounded-lg border"
+              onError={(e) => {
+                // Fallback: try to reconstruct from base64 if image URL fails
+                if (selectedSession.imageData && !e.target.src.startsWith('data:')) {
+                  e.target.src = `data:${selectedSession.imageType || 'image/png'};base64,${selectedSession.imageData}`;
+                }
+              }}
             />
             <div className="mt-4 flex items-center justify-between">
               <BiasIndicator bias={selectedSession.bias} large />
@@ -638,24 +713,140 @@ Session ID: ${session.id}
         
         <div className="space-y-4">
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <h3 className="font-semibold text-blue-900 mb-2">🔒 Secure API Configuration</h3>
+            <h3 className="font-semibold text-blue-900 mb-2">🔑 Your API Key (Required)</h3>
             <p className="text-sm text-blue-800 mb-3">
-              Your API key is now stored securely on the server as an environment variable. 
-              It's never exposed to the browser or client-side code.
+              Each user must provide their own Anthropic API key. Your key is encrypted and stored securely. 
+              It's never exposed to the browser or logged anywhere.
             </p>
-            <div className="bg-white rounded p-3 text-sm">
-              <p className="font-semibold mb-2">To configure your API key:</p>
-              <ul className="list-disc list-inside space-y-1 text-gray-700">
-                <li><strong>Vercel:</strong> Go to Project Settings → Environment Variables → Add <code className="bg-gray-100 px-1 rounded">ANTHROPIC_API_KEY</code></li>
-                <li><strong>Netlify:</strong> Go to Site Settings → Environment Variables → Add <code className="bg-gray-100 px-1 rounded">ANTHROPIC_API_KEY</code></li>
-                <li><strong>Local Dev:</strong> Create <code className="bg-gray-100 px-1 rounded">.env.local</code> with <code className="bg-gray-100 px-1 rounded">ANTHROPIC_API_KEY=your-key</code></li>
-              </ul>
-              <p className="mt-3 text-xs text-gray-600">
-                Get your API key from{' '}
-                <a href="https://console.anthropic.com/" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
-                  Anthropic Console
-                </a>
-              </p>
+            
+            {apiKeyMessage && (
+              <div className={`mb-3 p-3 rounded-lg text-sm ${
+                apiKeyStatus === 'saved' ? 'bg-green-100 text-green-800' : 
+                apiKeyStatus === 'error' ? 'bg-red-100 text-red-800' : 
+                'bg-yellow-100 text-yellow-800'
+              }`}>
+                {apiKeyMessage}
+              </div>
+            )}
+
+            <div className="bg-white rounded p-4 space-y-3">
+              <div>
+                <label className="block text-sm font-semibold mb-2">Anthropic API Key</label>
+                <div className="flex gap-2">
+                  <input
+                    type="password"
+                    value={apiKey}
+                    onChange={(e) => {
+                      setApiKey(e.target.value);
+                      setApiKeyMessage('');
+                      setApiKeyStatus(null);
+                    }}
+                    placeholder="sk-ant-api03-..."
+                    className="flex-1 p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-sm"
+                  />
+                  <button
+                    onClick={async () => {
+                      if (!apiKey.trim()) {
+                        setApiKeyMessage('Please enter an API key');
+                        setApiKeyStatus('error');
+                        return;
+                      }
+
+                      // Basic client-side validation
+                      if (!apiKey.trim().startsWith('sk-ant-')) {
+                        setApiKeyMessage('Invalid API key format. Must start with sk-ant-');
+                        setApiKeyStatus('error');
+                        return;
+                      }
+
+                      setApiKeyStatus('saving');
+                      setApiKeyMessage('');
+
+                      try {
+                        const token = await getAuthToken();
+                        if (!token) {
+                          throw new Error('Not authenticated. Please sign in.');
+                        }
+
+                        const response = await fetch('/api/save-key', {
+                          method: 'POST',
+                          headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}`
+                          },
+                          body: JSON.stringify({ apiKey: apiKey.trim() })
+                        });
+
+                        const data = await response.json();
+
+                        if (!response.ok) {
+                          throw new Error(data.error || 'Failed to save API key');
+                        }
+
+                        setApiKeyStatus('saved');
+                        setApiKeyMessage('✓ API key saved successfully! It is encrypted and secure.');
+                        setApiKey(''); // Clear input for security
+                      } catch (error) {
+                        setApiKeyStatus('error');
+                        setApiKeyMessage(`Error: ${error.message}`);
+                      }
+                    }}
+                    disabled={apiKeyStatus === 'saving' || apiKeyStatus === 'deleting'}
+                    className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {apiKeyStatus === 'saving' ? 'Saving...' : 'Save Key'}
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between pt-2 border-t">
+                <p className="text-xs text-gray-600">
+                  Get your API key from{' '}
+                  <a href="https://console.anthropic.com/" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                    Anthropic Console
+                  </a>
+                </p>
+                <button
+                  onClick={async () => {
+                    if (!confirm('Are you sure you want to delete your API key? You will not be able to use AI features until you add a new key.')) {
+                      return;
+                    }
+
+                    setApiKeyStatus('deleting');
+                    setApiKeyMessage('');
+
+                    try {
+                      const token = await getAuthToken();
+                      if (!token) {
+                        throw new Error('Not authenticated. Please sign in.');
+                      }
+
+                      const response = await fetch('/api/delete-key', {
+                        method: 'DELETE',
+                        headers: {
+                          'Authorization': `Bearer ${token}`
+                        }
+                      });
+
+                      const data = await response.json();
+
+                      if (!response.ok) {
+                        throw new Error(data.error || 'Failed to delete API key');
+                      }
+
+                      setApiKeyStatus('saved');
+                      setApiKeyMessage('✓ API key deleted successfully.');
+                    } catch (error) {
+                      setApiKeyStatus('error');
+                      setApiKeyMessage(`Error: ${error.message}`);
+                    }
+                  }}
+                  disabled={apiKeyStatus === 'saving' || apiKeyStatus === 'deleting'}
+                  className="text-red-600 hover:text-red-700 text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {apiKeyStatus === 'deleting' ? 'Deleting...' : 'Delete Key'}
+                </button>
+              </div>
             </div>
           </div>
 

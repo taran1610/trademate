@@ -49,12 +49,13 @@ npm run dev
    - Creates user accounts, database, and secure storage
    - Enables multi-user support for your friends!
 
-2. **Set up Anthropic API Key** (Server-Side):
+2. **Set up BYOK (Bring Your Own Key)**:
 
-   - See [SETUP.md](./SETUP.md) for detailed instructions
-   - API key is stored as an environment variable (never in browser)
-   - For Vercel/Netlify: Add `ANTHROPIC_API_KEY` in platform settings
-   - For local dev: Create `.env.local` with your API key
+   - See [BYOK_SETUP.md](./BYOK_SETUP.md) for detailed instructions
+   - Each user must provide their own Anthropic API key
+   - Keys are encrypted at rest using AES-256-GCM
+   - Users add their key in Settings after signing in
+   - No master API key - users pay for their own usage
 
 3. **Configure Email** (Optional):
    - Go to Settings in the app

@@ -48,8 +48,10 @@ const Auth = ({ onAuthChange }) => {
       if (error) throw error;
 
       if (data.user && !data.session) {
-        setMessage('Check your email for the confirmation link!');
-      } else {
+        // Email confirmation required
+        setMessage('Check your email for the confirmation link! Click the link in the email to verify your account, then sign in.');
+      } else if (data.session) {
+        // Auto-sign in if no confirmation required
         onAuthChange(data.user);
       }
     } catch (error) {
