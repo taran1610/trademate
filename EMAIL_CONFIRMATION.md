@@ -87,3 +87,4 @@ For production, you should configure a proper email provider:
 
 If emails still don't arrive, check Supabase logs or disable confirmation for testing.
 
+

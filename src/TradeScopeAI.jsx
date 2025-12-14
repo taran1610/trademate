@@ -17,6 +17,7 @@ const TradeScopeAI = () => {
   const [apiKey, setApiKey] = useState('');
   const [apiKeyStatus, setApiKeyStatus] = useState(null); // 'saving', 'saved', 'error', 'deleting'
   const [apiKeyMessage, setApiKeyMessage] = useState('');
+  const [brokenImages, setBrokenImages] = useState(new Set()); // Track images that failed to load
 
   // Check auth state on mount and listen for changes
   useEffect(() => {
@@ -278,31 +279,45 @@ const TradeScopeAI = () => {
     
     // Send email log
     if (userEmail) {
-      sendTradeLog(updatedSession);
+      try {
+        await sendTradeLog(updatedSession);
+        // Show success message
+        alert(`✓ Trade decision saved!\n✓ Email sent to ${userEmail}`);
+      } catch (error) {
+        console.error('Error sending email:', error);
+        // Still show success for saving, but warn about email
+        alert(`✓ Trade decision saved!\n⚠ Email could not be sent. Check console for details.`);
+      }
+    } else {
+      alert('✓ Trade decision saved!\n💡 Add your email in Settings to receive trade log emails');
     }
+    
     setSelectedSession(updatedSession);
   };
 
-  // Email Trade Log
-  const sendTradeLog = (session) => {
-    const subject = `TradeScope AI - Trade Log ${session.id}`;
-    const body = `
-Trade Log - ${new Date(session.timestamp).toLocaleString()}
+  // Send Trade Log Email via API
+  const sendTradeLog = async (session) => {
+    if (!userEmail) return;
 
-DECISION: ${session.tradeTaken ? 'TOOK TRADE' : 'DID NOT TAKE'}
+    const response = await fetch('/api/send-trade-email', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        to: userEmail,
+        sessionData: session
+      })
+    });
 
-BIAS: ${session.bias.toUpperCase()}
-
-REASON: ${session.tradeReason}
-
-ANALYSIS:
-
-${session.analysis}
-
-Session ID: ${session.id}
-    `.trim();
-
-    window.open(`mailto:${userEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`);
+    const data = await response.json();
+    
+    if (!response.ok || !data.success) {
+      // Throw error so caller can handle it properly
+      throw new Error(data.message || `Email sending failed: ${response.status}`);
+    }
+    
+    return data;
   };
 
   // Update Trade Outcome
@@ -317,6 +332,12 @@ Session ID: ${session.id}
     };
 
     await saveSession(updatedSession);
+    
+    // Send email log for outcome update
+    if (userEmail) {
+      await sendTradeLog(updatedSession);
+    }
+    
     setSelectedSession(updatedSession);
   };
 
@@ -431,17 +452,32 @@ Session ID: ${session.id}
                 className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
               >
                 <div className="flex items-center space-x-4">
-                  <img 
-                    src={session.image || (session.imageData ? `data:${session.imageType || 'image/png'};base64,${session.imageData}` : '')} 
-                    alt="Chart" 
-                    className="w-16 h-16 object-cover rounded" 
-                    onError={(e) => {
-                      // Fallback: try to reconstruct from base64 if image URL fails
-                      if (session.imageData && !e.target.src.startsWith('data:')) {
-                        e.target.src = `data:${session.imageType || 'image/png'};base64,${session.imageData}`;
-                      }
-                    }}
-                  />
+                  {brokenImages.has(session.id) ? (
+                    <div className="w-16 h-16 bg-gray-200 rounded flex items-center justify-center text-xs text-gray-500">
+                      No Image
+                    </div>
+                  ) : (
+                    <img 
+                      src={
+                        session.imageData 
+                          ? `data:${session.imageType || 'image/png'};base64,${session.imageData}`
+                          : session.image && session.image.startsWith('data:')
+                          ? session.image
+                          : session.image || ''
+                      } 
+                      alt="Chart" 
+                      className="w-16 h-16 object-cover rounded" 
+                      onError={(e) => {
+                        // Fallback: try to reconstruct from base64 if image URL fails
+                        if (session.imageData && !e.target.src.startsWith('data:')) {
+                          e.target.src = `data:${session.imageType || 'image/png'};base64,${session.imageData}`;
+                        } else {
+                          // No base64 data available - mark as broken
+                          setBrokenImages(prev => new Set(prev).add(session.id));
+                        }
+                      }}
+                    />
+                  )}
                   <div>
                     <p className="font-semibold">{new Date(session.timestamp).toLocaleString()}</p>
                     <p className="text-sm text-gray-600">Bias: {session.bias.toUpperCase()}</p>
@@ -584,17 +620,36 @@ Session ID: ${session.id}
           {/* Chart Image */}
           <div className="bg-white rounded-lg shadow-lg p-6">
             <h3 className="text-xl font-bold mb-4">Chart Analysis</h3>
-            <img 
-              src={selectedSession.image || (selectedSession.imageData ? `data:${selectedSession.imageType || 'image/png'};base64,${selectedSession.imageData}` : '')} 
-              alt="Trading Chart" 
-              className="w-full rounded-lg border"
-              onError={(e) => {
-                // Fallback: try to reconstruct from base64 if image URL fails
-                if (selectedSession.imageData && !e.target.src.startsWith('data:')) {
-                  e.target.src = `data:${selectedSession.imageType || 'image/png'};base64,${selectedSession.imageData}`;
-                }
-              }}
-            />
+            {brokenImages.has(selectedSession.id) ? (
+              <div className="w-full h-64 bg-gray-200 rounded-lg border flex items-center justify-center text-gray-500">
+                <div className="text-center">
+                  <p className="font-semibold mb-2">Image Unavailable</p>
+                  <p className="text-sm">This chart image is no longer available.</p>
+                  <p className="text-xs mt-2 text-gray-400">Old sessions may lose images after page reload.</p>
+                </div>
+              </div>
+            ) : (
+              <img 
+                src={
+                  selectedSession.imageData 
+                    ? `data:${selectedSession.imageType || 'image/png'};base64,${selectedSession.imageData}`
+                    : selectedSession.image && selectedSession.image.startsWith('data:')
+                    ? selectedSession.image
+                    : selectedSession.image || ''
+                } 
+                alt="Trading Chart" 
+                className="w-full rounded-lg border"
+                onError={(e) => {
+                  // Fallback: try to reconstruct from base64 if image URL fails
+                  if (selectedSession.imageData && !e.target.src.startsWith('data:')) {
+                    e.target.src = `data:${selectedSession.imageType || 'image/png'};base64,${selectedSession.imageData}`;
+                  } else {
+                    // No base64 data available - mark as broken
+                    setBrokenImages(prev => new Set(prev).add(selectedSession.id));
+                  }
+                }}
+              />
+            )}
             <div className="mt-4 flex items-center justify-between">
               <BiasIndicator bias={selectedSession.bias} large />
               <span className="text-sm text-gray-600">
@@ -780,6 +835,10 @@ Session ID: ${session.id}
                         const data = await response.json();
 
                         if (!response.ok) {
+                          // Better error message for configuration issues
+                          if (data.error && data.error.includes('Supabase not configured')) {
+                            throw new Error('Server configuration error. Please contact support or check that SUPABASE_SERVICE_ROLE_KEY is set in Vercel environment variables.');
+                          }
                           throw new Error(data.error || 'Failed to save API key');
                         }
 
@@ -831,6 +890,10 @@ Session ID: ${session.id}
                       const data = await response.json();
 
                       if (!response.ok) {
+                        // Better error message for configuration issues
+                        if (data.error && data.error.includes('Supabase not configured')) {
+                          throw new Error('Server configuration error. Please contact support or check that SUPABASE_SERVICE_ROLE_KEY is set in Vercel environment variables.');
+                        }
                         throw new Error(data.error || 'Failed to delete API key');
                       }
 

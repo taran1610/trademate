@@ -52,7 +52,6 @@ export default async function handler(req, res) {
       });
     }
 
-  try {
     const { imageData, imageType } = req.body;
 
     if (!imageData || !imageType) {

@@ -5,12 +5,14 @@
 Your application now uses a **Bring-Your-Own-Key (BYOK)** model where each user provides their own API key.
 
 ### Before (Master Key Model)
+
 - ❌ Single master API key for all users
 - ❌ You pay for all user API usage
 - ❌ Key stored as environment variable
 - ❌ Not scalable for multiple users
 
 ### After (BYOK Model)
+
 - ✅ Each user provides their own API key
 - ✅ Keys encrypted at rest with AES-256-GCM
 - ✅ Keys never exposed to browser or logged
@@ -75,4 +77,3 @@ To verify your API key is secure:
 - **Compliance**: Meets security best practices
 - **Monetization**: Can charge for app access, not API usage
 - **Privacy**: Each user's key is completely isolated
-
