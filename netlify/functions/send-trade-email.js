@@ -42,6 +42,17 @@ exports.handler = async (event, context) => {
       ? (sessionData.tradeOutcome === 'win' ? '✅ WIN' : '❌ LOSS')
       : 'Pending';
 
+    // Escape HTML to prevent XSS
+    const escapeHtml = (text) => {
+      if (!text) return '';
+      return String(text)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    };
+
     const emailHtml = `
       <!DOCTYPE html>
       <html>
@@ -78,20 +89,20 @@ exports.handler = async (event, context) => {
               
               <div class="section">
                 <div class="label">Bias:</div>
-                <div class="value"><strong>${sessionData.bias.toUpperCase()}</strong></div>
+                <div class="value"><strong>${escapeHtml(sessionData.bias.toUpperCase())}</strong></div>
               </div>
               
               ${sessionData.tradeReason ? `
               <div class="section">
                 <div class="label">Reason:</div>
-                <div class="value">${sessionData.tradeReason}</div>
+                <div class="value">${escapeHtml(sessionData.tradeReason)}</div>
               </div>
               ` : ''}
               
               ${sessionData.tradeOutcome ? `
               <div class="section">
                 <div class="label">Outcome:</div>
-                <div class="value"><strong>${outcomeText}</strong></div>
+                <div class="value"><strong>${escapeHtml(outcomeText)}</strong></div>
               </div>
               ` : ''}
               
@@ -110,7 +121,7 @@ exports.handler = async (event, context) => {
               ${sessionData.analysis ? `
               <div class="section">
                 <div class="label">AI Analysis:</div>
-                <div class="value" style="white-space: pre-wrap; font-size: 12px; max-height: 200px; overflow-y: auto;">${sessionData.analysis}</div>
+                <div class="value" style="white-space: pre-wrap; font-size: 12px; max-height: 200px; overflow-y: auto;">${escapeHtml(sessionData.analysis)}</div>
               </div>
               ` : ''}
             </div>

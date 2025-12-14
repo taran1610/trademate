@@ -3,6 +3,7 @@
 ## ✅ What's Already Done
 
 The "Took This Trade" and "Did Not Take" buttons are now fully functional and will send emails automatically when you:
+
 - Click either button
 - Enter a reason for your decision
 - Have your email set in Settings
@@ -52,6 +53,7 @@ The "Took This Trade" and "Did Not Take" buttons are now fully functional and wi
 ## 📧 What You'll Receive
 
 Each email includes:
+
 - ✅ Decision (Took Trade / Did Not Take)
 - ✅ Bias (Long/Short/Neutral)
 - ✅ Your reason
@@ -62,6 +64,7 @@ Each email includes:
 ## 🎨 Email Preview
 
 The emails are beautifully formatted with:
+
 - Professional design
 - Color-coded decisions (green for took, red for skipped)
 - Easy-to-read layout
@@ -70,16 +73,19 @@ The emails are beautifully formatted with:
 ## ⚠️ Troubleshooting
 
 ### "Email could not be sent"
+
 - Check `RESEND_API_KEY` is set in Vercel
 - Make sure you redeployed after adding it
 - Check Resend dashboard for delivery status
 
 ### No email received
+
 - Check spam/junk folder
 - Verify email address in Settings is correct
 - Check Resend dashboard for any errors
 
 ### "Email service not configured"
+
 - This is normal if `RESEND_API_KEY` isn't set yet
 - Trade is still saved, just no email sent
 - Follow setup steps above
@@ -91,4 +97,3 @@ The emails are beautifully formatted with:
 3. **Set up webhooks**: Track bounces/failures (optional)
 
 That's it! Your trade log emails are now fully functional! 🎉
-

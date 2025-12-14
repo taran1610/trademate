@@ -110,3 +110,4 @@ module.exports = {
   isConfigured: () => supabaseAdmin !== null
 };
 
+

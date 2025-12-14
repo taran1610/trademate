@@ -299,28 +299,25 @@ const TradeScopeAI = () => {
   const sendTradeLog = async (session) => {
     if (!userEmail) return;
 
-    try {
-      const response = await fetch('/api/send-trade-email', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          to: userEmail,
-          sessionData: session
-        })
-      });
+    const response = await fetch('/api/send-trade-email', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        to: userEmail,
+        sessionData: session
+      })
+    });
 
-      const data = await response.json();
-      if (data.success) {
-        console.log('Trade log email sent successfully');
-      } else {
-        console.warn('Email not sent:', data.message);
-      }
-    } catch (error) {
-      console.error('Error sending trade email:', error);
-      // Don't block the user - email is optional
+    const data = await response.json();
+    
+    if (!response.ok || !data.success) {
+      // Throw error so caller can handle it properly
+      throw new Error(data.message || `Email sending failed: ${response.status}`);
     }
+    
+    return data;
   };
 
   // Update Trade Outcome

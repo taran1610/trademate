@@ -106,3 +106,4 @@ For most users, Resend's free tier is sufficient.
 3. **Monitor email delivery** in your email service dashboard
 4. **Set up webhooks** to track bounces/failures (optional)
 
+

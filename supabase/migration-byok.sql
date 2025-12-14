@@ -14,3 +14,4 @@ FROM information_schema.columns
 WHERE table_name = 'user_preferences' 
 AND column_name = 'encrypted_api_key';
 
+
